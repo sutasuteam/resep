@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Kotak Resep</title>
+<link rel="shortcut icon" href="icons/favicon-32.png" type="image/png">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2F3D2C">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Kotak Resep">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700;9..144,900&family=Karla:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --board:#2F3D2C;
+  --board2:#242F1E;
+  --board-line: rgba(243,233,199,.14);
+  --paper:#FBF1DC;
+  --paper2:#F3E4BF;
+  --ink:#2B2114;
+  --ink-soft:#5B4E3B;
+  --chalk:#F3E9C7;
+  --chalk-muted:#9FAE93;
+  --turmeric:#E3A72E;
+  --turmeric-dark:#B9821C;
+  --chili:#B84B3A;
+  --sage:#7FA06F;
+  --shadow: 0 10px 24px rgba(0,0,0,.28);
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+html,body{background:var(--board); color:var(--chalk);}
+body{
+  font-family:'Karla',sans-serif;
+  padding-bottom:90px;
+  background-image:
+    radial-gradient(ellipse at top left, rgba(255,255,255,.03), transparent 60%),
+    radial-gradient(ellipse at bottom right, rgba(0,0,0,.15), transparent 60%);
+}
+::selection{ background:var(--turmeric); color:var(--ink); }
+
+/* ---------- HEADER / NAV ---------- */
+header.top{
+  padding:22px 18px 14px;
+  position:sticky; top:0; z-index:20;
+  background:linear-gradient(180deg, var(--board2) 0%, var(--board2) 80%, transparent);
+}
+.brand{
+  display:flex; align-items:baseline; gap:10px;
+}
+.brand .pin{
+  width:11px; height:11px; border-radius:50%;
+  background:var(--chili);
+  box-shadow: 0 0 0 3px rgba(184,75,58,.25);
+  flex-shrink:0;
+}
+header.top h1{
+  font-family:'Fraunces', serif;
+  font-weight:700;
+  font-size:26px;
+  letter-spacing:.2px;
+  color:var(--chalk);
+}
+header.top .tagline{
+  font-family:'Space Mono', monospace;
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--chalk-muted);
+  margin-top:4px;
+  margin-left:21px;
+}
+
+nav.maintabs{
+  display:flex; gap:6px; padding:14px 14px 12px;
+  position:sticky; top:76px; z-index:19;
+  background:var(--board2);
+  border-bottom:1px dashed var(--board-line);
+  overflow-x:auto;
+}
+nav.maintabs button{
+  flex-shrink:0;
+  font-family:'Space Mono', monospace;
+  font-size:12px; letter-spacing:.03em;
+  padding:10px 16px;
+  border:1px solid transparent;
+  border-radius:999px;
+  background:transparent;
+  color:var(--chalk-muted);
+  font-weight:700;
+  cursor:pointer;
+  transition:.15s;
+}
+nav.maintabs button.active{
+  background:var(--turmeric);
+  color:#2B2100;
+  border-color:var(--turmeric);
+}
+nav.maintabs button:not(.active):hover{
+  border-color:var(--board-line);
+  color:var(--chalk);
+}
+
+main{ padding:18px 16px 20px; max-width:760px; margin:0 auto;}
+.tab{display:none;} .tab.active{display:block;}
+
+/* ---------- SECTION HEADINGS ---------- */
+.section-head{
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:14px;
+}
+.section-head h2{
+  font-family:'Fraunces', serif;
+  font-weight:600; font-size:19px;
+  color:var(--chalk);
+}
+.section-sub{
+  font-family:'Space Mono', monospace;
+  font-size:10.5px; color:var(--chalk-muted);
+  text-transform:uppercase; letter-spacing:.06em;
+  margin-top:2px;
+}
+
+/* ---------- RECIPE INDEX CARDS ---------- */
+.card-grid{
+  display:grid; grid-template-columns:1fr; gap:16px;
+}
+.recipe-card{
+  position:relative;
+  background:var(--paper);
+  color:var(--ink);
+  border-radius:6px;
+  padding:18px 18px 16px 26px;
+  box-shadow:var(--shadow);
+  cursor:pointer;
+  border-top:3px solid var(--turmeric);
+  transition:transform .15s;
+}
+.recipe-card:active{ transform:scale(.99); }
+.recipe-card::before{
+  /* punch hole */
+  content:"";
+  position:absolute; left:9px; top:18px;
+  width:9px; height:9px; border-radius:50%;
+  background:var(--board);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,.5);
+}
+.recipe-card .cat-tag{
+  display:inline-block;
+  font-family:'Space Mono', monospace;
+  font-size:10px; letter-spacing:.05em; text-transform:uppercase;
+  color:var(--chili); font-weight:700;
+  margin-bottom:6px;
+}
+.recipe-card h3{
+  font-family:'Fraunces', serif;
+  font-size:20px; font-weight:600;
+  line-height:1.25; margin-bottom:6px;
+}
+.recipe-card .meta-row{
+  display:flex; gap:14px; margin-top:8px;
+  font-family:'Space Mono', monospace;
+  font-size:11px; color:var(--ink-soft);
+}
+.recipe-card .meta-row span{ display:flex; align-items:center; gap:4px;}
+.recipe-card .video-flag{
+  position:absolute; right:16px; top:16px;
+  font-size:15px;
+}
+.empty-state{
+  text-align:center; padding:50px 20px;
+  color:var(--chalk-muted);
+  font-family:'Space Mono', monospace;
+  font-size:12.5px; line-height:1.7;
+}
+.empty-state .big{
+  font-family:'Fraunces', serif;
+  font-size:20px; color:var(--chalk);
+  margin-bottom:8px; font-weight:600;
+}
+
+/* search / filter */
+.filter-row{ display:flex; gap:8px; margin-bottom:16px;}
+.filter-row select, .search-input{
+  font-family:'Karla',sans-serif;
+  background:var(--board2);
+  border:1px solid var(--board-line);
+  color:var(--chalk);
+  border-radius:8px;
+  padding:10px 12px;
+  font-size:13.5px;
+}
+.search-input{ flex:1; }
+.filter-row select{ width:150px; }
+.search-input::placeholder{ color:var(--chalk-muted); }
+
+/* ---------- FAB ---------- */
+.fab{
+  position:fixed; right:20px; bottom:24px; z-index:30;
+  width:56px; height:56px; border-radius:50%;
+  background:var(--turmeric); color:#2B2100;
+  border:none; font-size:26px; font-weight:700;
+  box-shadow:0 10px 22px rgba(0,0,0,.4);
+  cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+}
+.fab:active{ transform:scale(.94); }
+
+/* ---------- MODAL / DETAIL SHEET ---------- */
+.sheet-overlay{
+  display:none;
+  position:fixed; inset:0; z-index:50;
+  background:rgba(15,18,12,.72);
+  padding:0;
+  overflow-y:auto;
+}
+.sheet-overlay.show{ display:block; }
+.sheet{
+  background:var(--paper); color:var(--ink);
+  max-width:760px; margin:0 auto;
+  min-height:100vh;
+  padding:20px 20px 60px;
+  position:relative;
+}
+.sheet-top{
+  display:flex; justify-content:space-between; align-items:center;
+  margin-bottom:18px;
+}
+.sheet-close, .icon-btn{
+  font-family:'Space Mono', monospace;
+  background:var(--board);
+  color:var(--chalk);
+  border:none; border-radius:8px;
+  padding:9px 14px; font-size:12px; font-weight:700;
+  cursor:pointer;
+}
+.icon-btn.danger{ background:var(--chili); color:#fff; }
+.icon-btn.save{ background:var(--sage); color:#12210c; }
+.sheet-actions{ display:flex; gap:8px; }
+
+.sheet .cat-tag{
+  font-family:'Space Mono', monospace;
+  font-size:10.5px; letter-spacing:.05em; text-transform:uppercase;
+  color:var(--chili); font-weight:700;
+}
+.sheet h2.title{
+  font-family:'Fraunces', serif; font-size:28px; font-weight:700;
+  margin:6px 0 10px; line-height:1.2;
+}
+.sheet .meta-row{
+  display:flex; gap:16px; flex-wrap:wrap;
+  font-family:'Space Mono', monospace; font-size:11.5px;
+  color:var(--ink-soft); margin-bottom:18px;
+  padding-bottom:14px; border-bottom:1px dashed rgba(43,33,20,.2);
+}
+
+.video-wrap{ margin-bottom:20px; }
+.video-wrap iframe{
+  width:100%; aspect-ratio:16/9; border:none; border-radius:8px;
+  background:#000;
+}
+.video-link-btn{
+  display:inline-flex; align-items:center; gap:8px;
+  background:var(--board); color:var(--chalk);
+  padding:12px 16px; border-radius:8px; text-decoration:none;
+  font-family:'Space Mono', monospace; font-size:12.5px; font-weight:700;
+}
+
+.sheet h4.block-title{
+  font-family:'Fraunces', serif; font-size:16px; font-weight:600;
+  margin:22px 0 10px;
+  display:flex; align-items:center; gap:8px;
+}
+.sheet h4.block-title::before{
+  content:""; width:16px; height:2px; background:var(--turmeric); display:inline-block;
+}
+.ing-list{ list-style:none; }
+.ing-list li{
+  padding:9px 0; border-bottom:1px solid rgba(43,33,20,.1);
+  font-size:14px; display:flex; justify-content:space-between; gap:10px;
+}
+.ing-list li .qty{
+  font-family:'Space Mono', monospace; color:var(--ink-soft); flex-shrink:0;
+}
+.step-list{ list-style:none; counter-reset:step; }
+.step-list li{
+  counter-increment:step;
+  padding:12px 0 12px 34px; position:relative;
+  border-bottom:1px solid rgba(43,33,20,.1);
+  font-size:14.5px; line-height:1.55;
+}
+.step-list li::before{
+  content:counter(step);
+  position:absolute; left:0; top:11px;
+  width:22px; height:22px; border-radius:50%;
+  background:var(--turmeric); color:#2B2100;
+  font-family:'Space Mono', monospace; font-size:11px; font-weight:700;
+  display:flex; align-items:center; justify-content:center;
+}
+.notes-box{
+  background:var(--paper2); border-radius:8px; padding:14px 16px;
+  font-size:13.5px; line-height:1.6; color:var(--ink-soft);
+  margin-top:16px; font-style:italic;
+}
+
+/* ---------- FORM ---------- */
+.form-group{ margin-bottom:14px; }
+.form-group label{
+  display:block; font-family:'Space Mono', monospace;
+  font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+  color:var(--ink-soft); margin-bottom:6px; font-weight:700;
+}
+.form-group input[type=text], .form-group input[type=number], .form-group input[type=url],
+.form-group select, .form-group textarea{
+  width:100%; padding:11px 12px;
+  border:1px solid rgba(43,33,20,.18);
+  border-radius:8px; background:#fff;
+  font-family:'Karla',sans-serif; font-size:14px; color:var(--ink);
+}
+.form-group textarea{ resize:vertical; min-height:70px; }
+.two-col{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.dyn-row{ display:flex; gap:8px; margin-bottom:8px; align-items:center; }
+.dyn-row input{ flex:1; }
+.dyn-row input.qty-input{ flex:0 0 76px; }
+.dyn-row .rm-btn{
+  flex-shrink:0; width:34px; height:34px; border-radius:8px;
+  border:none; background:var(--chili); color:#fff; font-size:16px; cursor:pointer;
+}
+.add-row-btn{
+  width:100%; padding:10px; border:1px dashed rgba(43,33,20,.3);
+  background:transparent; border-radius:8px; color:var(--ink-soft);
+  font-family:'Space Mono', monospace; font-size:12px; font-weight:700;
+  cursor:pointer; margin-bottom:14px;
+}
+.form-submit{
+  width:100%; padding:14px; border:none; border-radius:10px;
+  background:var(--sage); color:#12210c; font-weight:700; font-size:14.5px;
+  cursor:pointer; margin-top:6px;
+  font-family:'Karla',sans-serif;
+}
+
+/* ---------- JADWAL MINGGUAN (menu board) ---------- */
+.board-list{ display:flex; flex-direction:column; gap:0; }
+.day-row{
+  padding:18px 4px;
+  border-bottom:1px dashed var(--board-line);
+  display:flex; gap:16px; align-items:flex-start;
+}
+.day-row:last-child{ border-bottom:none; }
+.day-row.is-tomorrow{
+  background:linear-gradient(90deg, rgba(227,167,46,.1), transparent 60%);
+  border-radius:8px;
+  margin:0 -10px; padding-left:14px; padding-right:10px;
+}
+.day-label{
+  flex:0 0 82px;
+  font-family:'Space Mono', monospace;
+  font-size:12px; letter-spacing:.05em; text-transform:uppercase;
+  color:var(--chalk-muted); font-weight:700; padding-top:4px;
+}
+.day-row.is-tomorrow .day-label{ color:var(--turmeric); }
+.day-body{ flex:1; }
+.day-select{
+  width:100%; padding:11px 12px;
+  background:var(--board2); border:1px solid var(--board-line);
+  color:var(--chalk); border-radius:8px; font-family:'Karla',sans-serif;
+  font-size:14px; margin-bottom:6px;
+}
+.day-custom{
+  width:100%; padding:9px 12px;
+  background:transparent; border:none; border-bottom:1px solid var(--board-line);
+  color:var(--chalk-muted); font-family:'Fraunces', serif; font-size:15px;
+  font-style:italic;
+}
+.day-custom::placeholder{ color:var(--chalk-muted); opacity:.6; }
+.tomorrow-flag{
+  display:inline-block; font-family:'Space Mono', monospace; font-size:9.5px;
+  background:var(--turmeric); color:#2B2100; padding:2px 8px; border-radius:99px;
+  margin-left:8px; font-weight:700; vertical-align:middle;
+}
+
+.toast{
+  position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
+  background:var(--paper); color:var(--ink);
+  padding:12px 20px; border-radius:8px; box-shadow:var(--shadow);
+  font-family:'Space Mono', monospace; font-size:12.5px; font-weight:700;
+  opacity:0; pointer-events:none; transition:.25s; z-index:60;
+}
+.toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand"><span class="pin"></span><h1>Kotak Resep</h1></div>
+  <div class="tagline">Resep keluarga &amp; jadwal masak mingguan</div>
+</header>
+
+<nav class="maintabs">
+  <button data-tab="resep" class="active">📇 Resep</button>
+  <button data-tab="jadwal">🗓️ Jadwal Mingguan</button>
+</nav>
+
+<main>
+
+  <!-- ================= RESEP ================= -->
+  <section id="tab-resep" class="tab active">
+    <div class="section-head">
+      <div>
+        <h2>Kartu Resep</h2>
+        <div class="section-sub" id="recipeCount">0 resep tersimpan</div>
+      </div>
+    </div>
+
+    <div class="filter-row">
+      <input type="text" id="searchInput" class="search-input" placeholder="Cari resep...">
+      <select id="filterCategory">
+        <option value="">Semua</option>
+        <option value="Sarapan">Sarapan</option>
+        <option value="Makan Siang">Makan Siang</option>
+        <option value="Makan Malam">Makan Malam</option>
+        <option value="Camilan">Camilan</option>
+        <option value="Lainnya">Lainnya</option>
+      </select>
+    </div>
+
+    <div id="recipeGrid" class="card-grid"></div>
+  </section>
+
+  <!-- ================= JADWAL ================= -->
+  <section id="tab-jadwal" class="tab">
+    <div class="section-head">
+      <div>
+        <h2>Papan Menu Mingguan</h2>
+        <div class="section-sub">Senin — Minggu</div>
+      </div>
+    </div>
+    <div class="board-list" id="scheduleBoard"></div>
+  </section>
+
+</main>
+
+<button class="fab" id="fabAdd">＋</button>
+
+<!-- ============ DETAIL SHEET ============ -->
+<div class="sheet-overlay" id="detailOverlay">
+  <div class="sheet" id="detailSheet"></div>
+</div>
+
+<!-- ============ FORM SHEET (tambah/edit resep) ============ -->
+<div class="sheet-overlay" id="formOverlay">
+  <div class="sheet">
+    <div class="sheet-top">
+      <span class="cat-tag" id="formHeading">Resep Baru</span>
+      <button class="sheet-close" id="formCloseBtn">✕ Tutup</button>
+    </div>
+
+    <div class="form-group">
+      <label>Nama Masakan</label>
+      <input type="text" id="fName" placeholder="contoh: Rendang Daging Sapi">
+    </div>
+
+    <div class="two-col">
+      <div class="form-group">
+        <label>Kategori</label>
+        <select id="fCategory">
+          <option>Sarapan</option>
+          <option>Makan Siang</option>
+          <option>Makan Malam</option>
+          <option>Camilan</option>
+          <option>Lainnya</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Waktu Masak</label>
+        <input type="text" id="fTime" placeholder="contoh: 45 menit">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Porsi</label>
+      <input type="text" id="fServings" placeholder="contoh: 4 orang">
+    </div>
+
+    <div class="form-group">
+      <label>Link Video Tutorial (YouTube / Google Drive)</label>
+      <input type="url" id="fVideo" placeholder="https://youtube.com/watch?v=...">
+    </div>
+
+    <div class="form-group">
+      <label>Bahan-bahan</label>
+      <div id="ingredientRows"></div>
+      <button type="button" class="add-row-btn" id="addIngredientBtn">+ Tambah Bahan</button>
+    </div>
+
+    <div class="form-group">
+      <label>Langkah Memasak</label>
+      <div id="stepRows"></div>
+      <button type="button" class="add-row-btn" id="addStepBtn">+ Tambah Langkah</button>
+    </div>
+
+    <div class="form-group">
+      <label>Catatan (opsional)</label>
+      <textarea id="fNotes" placeholder="Tips, variasi bumbu, dll..."></textarea>
+    </div>
+
+    <button class="form-submit" id="saveRecipeBtn">💾 Simpan Resep</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   STATE & STORAGE (localStorage)
+   ============================================================ */
+const LS_RECIPES = "kotakresep_recipes";
+const LS_SCHEDULE = "kotakresep_schedule";
+const DAYS = ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu","Minggu"];
+
+let recipes = JSON.parse(localStorage.getItem(LS_RECIPES) || "[]");
+let schedule = JSON.parse(localStorage.getItem(LS_SCHEDULE) || "{}");
+let editingId = null;
+
+function saveRecipes(){ localStorage.setItem(LS_RECIPES, JSON.stringify(recipes)); }
+function saveSchedule(){ localStorage.setItem(LS_SCHEDULE, JSON.stringify(schedule)); }
+function uid(){ return "r_" + Date.now() + "_" + Math.floor(Math.random()*9999); }
+
+function showToast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"), 1800);
+}
+
+/* ============================================================
+   NAVIGASI TAB
+   ============================================================ */
+document.querySelectorAll("nav.maintabs button").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    document.querySelectorAll("nav.maintabs button").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+    document.getElementById("tab-"+btn.dataset.tab).classList.add("active");
+    if(btn.dataset.tab === "jadwal") renderSchedule();
+  });
+});
+
+/* ============================================================
+   VIDEO EMBED HELPER
+   ============================================================ */
+function getEmbed(url){
+  if(!url) return null;
+  url = url.trim();
+  const yt = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([a-zA-Z0-9_-]{11})/);
+  if(yt) return { type:"embed", src:`https://www.youtube.com/embed/${yt[1]}` };
+  const drive = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if(drive) return { type:"embed", src:`https://drive.google.com/file/d/${drive[1]}/preview` };
+  return { type:"link", src:url };
+}
+
+/* ============================================================
+   RENDER: DAFTAR RESEP
+   ============================================================ */
+function renderRecipeList(){
+  const grid = document.getElementById("recipeGrid");
+  const search = document.getElementById("searchInput").value.trim().toLowerCase();
+  const cat = document.getElementById("filterCategory").value;
+
+  let list = recipes.filter(r=>{
+    const matchSearch = !search || r.name.toLowerCase().includes(search);
+    const matchCat = !cat || r.category === cat;
+    return matchSearch && matchCat;
+  });
+
+  document.getElementById("recipeCount").textContent = `${recipes.length} resep tersimpan`;
+
+  if(list.length === 0){
+    grid.innerHTML = `<div class="empty-state">
+      <div class="big">Kotak resep masih kosong</div>
+      ${recipes.length === 0 ? "Tekan tombol ＋ untuk menulis resep pertamamu." : "Tidak ada resep yang cocok dengan pencarian."}
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = "";
+  list.slice().reverse().forEach(r=>{
+    const el = document.createElement("div");
+    el.className = "recipe-card";
+    el.innerHTML = `
+      ${r.videoUrl ? '<span class="video-flag">🎥</span>' : ''}
+      <span class="cat-tag">${r.category}</span>
+      <h3>${escapeHtml(r.name)}</h3>
+      <div class="meta-row">
+        ${r.time ? `<span>⏱ ${escapeHtml(r.time)}</span>` : ''}
+        ${r.servings ? `<span>🍽 ${escapeHtml(r.servings)}</span>` : ''}
+        <span>📝 ${r.ingredients.length} bahan</span>
+      </div>`;
+    el.addEventListener("click", ()=>openDetail(r.id));
+    grid.appendChild(el);
+  });
+}
+document.getElementById("searchInput").addEventListener("input", renderRecipeList);
+document.getElementById("filterCategory").addEventListener("change", renderRecipeList);
+
+function escapeHtml(v){
+  return String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+/* ============================================================
+   DETAIL SHEET
+   ============================================================ */
+const detailOverlay = document.getElementById("detailOverlay");
+const detailSheet = document.getElementById("detailSheet");
+
+function openDetail(id){
+  const r = recipes.find(x=>x.id === id);
+  if(!r) return;
+
+  const embed = getEmbed(r.videoUrl);
+  let videoHtml = "";
+  if(embed){
+    if(embed.type === "embed"){
+      videoHtml = `<div class="video-wrap"><iframe src="${embed.src}" allowfullscreen></iframe></div>`;
+    } else {
+      videoHtml = `<div class="video-wrap"><a class="video-link-btn" href="${embed.src}" target="_blank" rel="noopener">🎥 Buka Video Tutorial</a></div>`;
+    }
+  }
+
+  detailSheet.innerHTML = `
+    <div class="sheet-top">
+      <span class="cat-tag">${r.category}</span>
+      <div class="sheet-actions">
+        <button class="icon-btn" id="editBtn">✏️ Edit</button>
+        <button class="icon-btn danger" id="deleteBtn">🗑️</button>
+        <button class="sheet-close" id="closeDetailBtn">✕</button>
+      </div>
+    </div>
+    <h2 class="title">${escapeHtml(r.name)}</h2>
+    <div class="meta-row">
+      ${r.time ? `<span>⏱ ${escapeHtml(r.time)}</span>` : ''}
+      ${r.servings ? `<span>🍽 ${escapeHtml(r.servings)}</span>` : ''}
+    </div>
+    ${videoHtml}
+    <h4 class="block-title">Bahan-bahan</h4>
+    <ul class="ing-list">
+      ${r.ingredients.map(i=>`<li><span>${escapeHtml(i.name)}</span><span class="qty">${escapeHtml(i.qty||"")}</span></li>`).join("")}
+    </ul>
+    <h4 class="block-title">Langkah Memasak</h4>
+    <ol class="step-list">
+      ${r.steps.map(s=>`<li>${escapeHtml(s)}</li>`).join("")}
+    </ol>
+    ${r.notes ? `<div class="notes-box">💡 ${escapeHtml(r.notes)}</div>` : ''}
+  `;
+
+  document.getElementById("closeDetailBtn").addEventListener("click", closeDetail);
+  document.getElementById("editBtn").addEventListener("click", ()=>{ closeDetail(); openForm(r.id); });
+  document.getElementById("deleteBtn").addEventListener("click", ()=>{
+    if(confirm(`Hapus resep "${r.name}"?`)){
+      recipes = recipes.filter(x=>x.id !== r.id);
+      // bersihkan jadwal yang memakai resep ini
+      Object.keys(schedule).forEach(day=>{
+        if(schedule[day] && schedule[day].recipeId === r.id) delete schedule[day];
+      });
+      saveRecipes(); saveSchedule();
+      closeDetail();
+      renderRecipeList();
+      showToast("Resep dihapus");
+    }
+  });
+
+  detailOverlay.classList.add("show");
+}
+function closeDetail(){ detailOverlay.classList.remove("show"); }
+detailOverlay.addEventListener("click", (e)=>{ if(e.target === detailOverlay) closeDetail(); });
+
+/* ============================================================
+   FORM SHEET (tambah / edit resep)
+   ============================================================ */
+const formOverlay = document.getElementById("formOverlay");
+const ingredientRows = document.getElementById("ingredientRows");
+const stepRows = document.getElementById("stepRows");
+
+function addIngredientRow(qty="", name=""){
+  const row = document.createElement("div");
+  row.className = "dyn-row";
+  row.innerHTML = `
+    <input type="text" class="qty-input ing-qty" placeholder="jumlah" value="${escapeHtml(qty)}">
+    <input type="text" class="ing-name" placeholder="nama bahan" value="${escapeHtml(name)}">
+    <button type="button" class="rm-btn">✕</button>`;
+  row.querySelector(".rm-btn").addEventListener("click", ()=>row.remove());
+  ingredientRows.appendChild(row);
+}
+function addStepRow(text=""){
+  const row = document.createElement("div");
+  row.className = "dyn-row";
+  row.innerHTML = `
+    <input type="text" class="step-text" placeholder="tulis langkah..." value="${escapeHtml(text)}">
+    <button type="button" class="rm-btn">✕</button>`;
+  row.querySelector(".rm-btn").addEventListener("click", ()=>row.remove());
+  stepRows.appendChild(row);
+}
+document.getElementById("addIngredientBtn").addEventListener("click", ()=>addIngredientRow());
+document.getElementById("addStepBtn").addEventListener("click", ()=>addStepRow());
+
+function openForm(id=null){
+  editingId = id;
+  document.getElementById("formHeading").textContent = id ? "Edit Resep" : "Resep Baru";
+  ingredientRows.innerHTML = "";
+  stepRows.innerHTML = "";
+
+  if(id){
+    const r = recipes.find(x=>x.id === id);
+    document.getElementById("fName").value = r.name;
+    document.getElementById("fCategory").value = r.category;
+    document.getElementById("fTime").value = r.time || "";
+    document.getElementById("fServings").value = r.servings || "";
+    document.getElementById("fVideo").value = r.videoUrl || "";
+    document.getElementById("fNotes").value = r.notes || "";
+    r.ingredients.forEach(i=>addIngredientRow(i.qty, i.name));
+    r.steps.forEach(s=>addStepRow(s));
+  } else {
+    document.getElementById("fName").value = "";
+    document.getElementById("fCategory").value = "Makan Malam";
+    document.getElementById("fTime").value = "";
+    document.getElementById("fServings").value = "";
+    document.getElementById("fVideo").value = "";
+    document.getElementById("fNotes").value = "";
+    addIngredientRow();
+    addIngredientRow();
+    addStepRow();
+  }
+  formOverlay.classList.add("show");
+}
+function closeForm(){ formOverlay.classList.remove("show"); editingId = null; }
+document.getElementById("formCloseBtn").addEventListener("click", closeForm);
+formOverlay.addEventListener("click", (e)=>{ if(e.target === formOverlay) closeForm(); });
+document.getElementById("fabAdd").addEventListener("click", ()=>openForm(null));
+
+document.getElementById("saveRecipeBtn").addEventListener("click", ()=>{
+  const name = document.getElementById("fName").value.trim();
+  if(!name){ alert("❌ Nama masakan wajib diisi!"); return; }
+
+  const ingredients = [...ingredientRows.querySelectorAll(".dyn-row")]
+    .map(row => ({
+      qty: row.querySelector(".ing-qty").value.trim(),
+      name: row.querySelector(".ing-name").value.trim()
+    }))
+    .filter(i => i.name);
+
+  const steps = [...stepRows.querySelectorAll(".dyn-row")]
+    .map(row => row.querySelector(".step-text").value.trim())
+    .filter(s => s);
+
+  if(ingredients.length === 0){ alert("❌ Tambahkan minimal 1 bahan!"); return; }
+  if(steps.length === 0){ alert("❌ Tambahkan minimal 1 langkah memasak!"); return; }
+
+  const data = {
+    name,
+    category: document.getElementById("fCategory").value,
+    time: document.getElementById("fTime").value.trim(),
+    servings: document.getElementById("fServings").value.trim(),
+    videoUrl: document.getElementById("fVideo").value.trim(),
+    notes: document.getElementById("fNotes").value.trim(),
+    ingredients,
+    steps
+  };
+
+  if(editingId){
+    const idx = recipes.findIndex(r=>r.id === editingId);
+    recipes[idx] = { ...recipes[idx], ...data };
+    showToast("Resep diperbarui");
+  } else {
+    recipes.push({ id: uid(), ...data });
+    showToast("Resep disimpan");
+  }
+
+  saveRecipes();
+  closeForm();
+  renderRecipeList();
+});
+
+/* ============================================================
+   JADWAL MINGGUAN
+   ============================================================ */
+function getTomorrowDayName(){
+  // JS: 0=Minggu,1=Senin,...6=Sabtu -> urutan kita mulai Senin
+  const jsDay = new Date().getDay();
+  const ourTodayIndex = jsDay === 0 ? 6 : jsDay - 1; // 0=Senin ... 6=Minggu
+  const tomorrowIndex = (ourTodayIndex + 1) % 7;
+  return DAYS[tomorrowIndex];
+}
+
+function renderSchedule(){
+  const board = document.getElementById("scheduleBoard");
+  const tomorrow = getTomorrowDayName();
+  board.innerHTML = "";
+
+  DAYS.forEach(day=>{
+    const entry = schedule[day] || { recipeId:"", custom:"" };
+    const isTomorrow = day === tomorrow;
+
+    const row = document.createElement("div");
+    row.className = "day-row" + (isTomorrow ? " is-tomorrow" : "");
+    row.innerHTML = `
+      <div class="day-label">${day}${isTomorrow ? '<span class="tomorrow-flag">besok</span>' : ''}</div>
+      <div class="day-body">
+        <select class="day-select" data-day="${day}">
+          <option value="">— pilih dari kotak resep —</option>
+          ${recipes.map(r=>`<option value="${r.id}" ${entry.recipeId===r.id?'selected':''}>${escapeHtml(r.name)}</option>`).join("")}
+        </select>
+        <input type="text" class="day-custom" data-day="${day}" placeholder="atau tulis bebas, misal: Mie goreng sisa kemarin" value="${escapeHtml(entry.custom||"")}">
+      </div>`;
+    board.appendChild(row);
+  });
+
+  board.querySelectorAll(".day-select").forEach(sel=>{
+    sel.addEventListener("change", ()=>{
+      const day = sel.dataset.day;
+      if(!schedule[day]) schedule[day] = {recipeId:"", custom:""};
+      schedule[day].recipeId = sel.value;
+      if(sel.value) schedule[day].custom = ""; // pilih dari resep -> kosongkan teks bebas
+      saveSchedule();
+      renderSchedule();
+      showToast(`Menu ${day} disimpan`);
+    });
+  });
+  board.querySelectorAll(".day-custom").forEach(inp=>{
+    inp.addEventListener("change", ()=>{
+      const day = inp.dataset.day;
+      if(!schedule[day]) schedule[day] = {recipeId:"", custom:""};
+      schedule[day].custom = inp.value.trim();
+      if(inp.value.trim()) schedule[day].recipeId = "";
+      saveSchedule();
+      showToast(`Menu ${day} disimpan`);
+    });
+  });
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+renderRecipeList();
+renderSchedule();
+
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("service-worker.js").catch(err=>{
+    console.warn("[service-worker] gagal terdaftar (aman diabaikan):", err.message);
+  });
+}
+</script>
+</body>
+</html>
