@@ -260,7 +260,7 @@ main{ padding:18px 16px 20px; max-width:760px; margin:0 auto;}
 }
 
 .video-wrap{ margin-bottom:20px; }
-.video-wrap iframe{
+.video-wrap iframe, .video-wrap video{
   width:100%; aspect-ratio:16/9; border:none; border-radius:8px;
   background:#000;
 }
@@ -337,6 +337,36 @@ main{ padding:18px 16px 20px; max-width:760px; margin:0 auto;}
   font-family:'Space Mono', monospace; font-size:12px; font-weight:700;
   cursor:pointer; margin-bottom:14px;
 }
+.video-mode-tabs{ display:flex; gap:8px; margin-bottom:10px; }
+.video-mode-btn{
+  flex:1; padding:9px 10px; border-radius:8px;
+  border:1px solid rgba(43,33,20,.18); background:#fff;
+  font-family:'Space Mono', monospace; font-size:11.5px; font-weight:700;
+  color:var(--ink-soft); cursor:pointer;
+}
+.video-mode-btn.active{
+  background:var(--turmeric); border-color:var(--turmeric); color:#2B2100;
+}
+.upload-dropzone{
+  border:2px dashed rgba(43,33,20,.25); border-radius:10px;
+  padding:22px 16px; text-align:center; cursor:pointer;
+  background:#fff;
+}
+.dz-icon{ font-size:28px; margin-bottom:6px; }
+.dz-text{ font-size:13.5px; color:var(--ink); font-weight:600; }
+.dz-hint{ font-size:11px; color:var(--ink-soft); margin-top:4px; font-family:'Space Mono', monospace; }
+.progress-track{
+  width:100%; height:8px; background:rgba(43,33,20,.12); border-radius:99px;
+  margin-top:10px; overflow:hidden;
+}
+.progress-fill{
+  height:100%; width:0%; background:var(--sage); transition:width .15s;
+}
+.rm-video-btn{
+  margin-top:10px; border:none; background:var(--chili); color:#fff;
+  padding:8px 14px; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer;
+}
+
 .form-submit{
   width:100%; padding:14px; border:none; border-radius:10px;
   background:var(--sage); color:#12210c; font-weight:700; font-size:14.5px;
@@ -488,8 +518,35 @@ main{ padding:18px 16px 20px; max-width:760px; margin:0 auto;}
     </div>
 
     <div class="form-group">
-      <label>Link Video Tutorial (YouTube / Google Drive)</label>
-      <input type="url" id="fVideo" placeholder="https://youtube.com/watch?v=...">
+      <label>Video Tutorial</label>
+      <div class="video-mode-tabs">
+        <button type="button" class="video-mode-btn active" id="modeUploadBtn" data-mode="upload">📤 Upload Video</button>
+        <button type="button" class="video-mode-btn" id="modeLinkBtn" data-mode="link">🔗 Link YouTube/Drive</button>
+      </div>
+
+      <div id="uploadModeBox" class="video-mode-box">
+        <input type="file" id="fVideoFile" accept="video/*" style="display:none;">
+        <div id="uploadDropzone" class="upload-dropzone">
+          <div id="uploadIdleState">
+            <div class="dz-icon">🎬</div>
+            <div class="dz-text">Ketuk untuk pilih video dari galeri</div>
+            <div class="dz-hint">Maks ±80MB per video, kuota terbatas</div>
+          </div>
+          <div id="uploadProgressState" style="display:none;">
+            <div class="dz-text" id="uploadProgressLabel">Mengunggah... 0%</div>
+            <div class="progress-track"><div class="progress-fill" id="uploadProgressFill"></div></div>
+          </div>
+          <div id="uploadDoneState" style="display:none;">
+            <div class="dz-icon">✅</div>
+            <div class="dz-text" id="uploadDoneFilename">video.mp4</div>
+            <button type="button" class="rm-video-btn" id="removeUploadedVideoBtn">🗑️ Hapus video ini</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="linkModeBox" class="video-mode-box" style="display:none;">
+        <input type="url" id="fVideo" placeholder="https://youtube.com/watch?v=...">
+      </div>
     </div>
 
     <div class="form-group">
@@ -519,6 +576,26 @@ main{ padding:18px 16px 20px; max-width:760px; margin:0 auto;}
 /* ============================================================
    STATE & STORAGE (localStorage)
    ============================================================ */
+/* ============================================================
+   ⚙️ KONFIGURASI CLOUDINARY (isi sesuai akun Cloudinary kamu)
+   ============================================================
+   1. Buat akun gratis di https://cloudinary.com
+   2. Cloud Name ada di Dashboard, contoh: "dxyz1234a"
+   3. Buat Upload Preset baru (Settings → Upload → Add upload preset):
+      - Signing Mode: Unsigned
+      - Folder: kotak-resep
+      - Resource type: Video
+      - (opsional) atur "Max file size" di preset untuk jaga kuota
+   4. CLOUDINARY_DELETE_WORKER_URL: alamat Cloudflare Worker untuk
+      menghapus video saat resep dihapus (lihat file cloudinary-delete-worker.js
+      yang disertakan). Kosongkan "" kalau belum dipasang — video lama
+      di Cloudinary tidak akan otomatis terhapus, hanya referensinya saja.
+   ============================================================ */
+const CLOUDINARY_CLOUD_NAME = "GANTI_DENGAN_CLOUD_NAME";
+const CLOUDINARY_UPLOAD_PRESET = "GANTI_DENGAN_UPLOAD_PRESET";
+const CLOUDINARY_DELETE_WORKER_URL = ""; // contoh: "https://kotakresep-delete.namamu.workers.dev"
+const MAX_VIDEO_MB = 80;
+
 const LS_RECIPES = "kotakresep_recipes";
 const LS_SCHEDULE = "kotakresep_schedule";
 const DAYS = ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu","Minggu"];
@@ -593,7 +670,7 @@ function renderRecipeList(){
     const el = document.createElement("div");
     el.className = "recipe-card";
     el.innerHTML = `
-      ${r.videoUrl ? '<span class="video-flag">🎥</span>' : ''}
+      ${(r.videoMode === "upload" && r.videoUpload) || (r.videoMode === "link" && r.videoUrl) ? '<span class="video-flag">🎥</span>' : ''}
       <span class="cat-tag">${r.category}</span>
       <h3>${escapeHtml(r.name)}</h3>
       <div class="meta-row">
@@ -622,12 +699,14 @@ function openDetail(id){
   const r = recipes.find(x=>x.id === id);
   if(!r) return;
 
-  const embed = getEmbed(r.videoUrl);
   let videoHtml = "";
-  if(embed){
-    if(embed.type === "embed"){
+  if(r.videoMode === "upload" && r.videoUpload?.url){
+    videoHtml = `<div class="video-wrap"><video controls preload="metadata" src="${r.videoUpload.url}"></video></div>`;
+  } else if(r.videoUrl){
+    const embed = getEmbed(r.videoUrl);
+    if(embed?.type === "embed"){
       videoHtml = `<div class="video-wrap"><iframe src="${embed.src}" allowfullscreen></iframe></div>`;
-    } else {
+    } else if(embed){
       videoHtml = `<div class="video-wrap"><a class="video-link-btn" href="${embed.src}" target="_blank" rel="noopener">🎥 Buka Video Tutorial</a></div>`;
     }
   }
@@ -660,7 +739,7 @@ function openDetail(id){
 
   document.getElementById("closeDetailBtn").addEventListener("click", closeDetail);
   document.getElementById("editBtn").addEventListener("click", ()=>{ closeDetail(); openForm(r.id); });
-  document.getElementById("deleteBtn").addEventListener("click", ()=>{
+  document.getElementById("deleteBtn").addEventListener("click", async ()=>{
     if(confirm(`Hapus resep "${r.name}"?`)){
       recipes = recipes.filter(x=>x.id !== r.id);
       // bersihkan jadwal yang memakai resep ini
@@ -671,6 +750,11 @@ function openDetail(id){
       closeDetail();
       renderRecipeList();
       showToast("Resep dihapus");
+
+      // hapus video di Cloudinary juga, supaya kuota tidak terus terisi
+      if(r.videoMode === "upload" && r.videoUpload?.publicId){
+        deleteVideoFromCloudinary(r.videoUpload.publicId);
+      }
     }
   });
 
@@ -708,11 +792,156 @@ function addStepRow(text=""){
 document.getElementById("addIngredientBtn").addEventListener("click", ()=>addIngredientRow());
 document.getElementById("addStepBtn").addEventListener("click", ()=>addStepRow());
 
+/* ============================================================
+   🎬 VIDEO: mode toggle (upload vs link) + upload ke Cloudinary
+   ============================================================ */
+let pendingUpload = null; // {url, publicId, fileName} hasil upload aktif di form ini
+let oldVideoUpload = null; // video lama (saat edit) yang mungkin perlu dihapus dari Cloudinary
+let uploadInProgress = false;
+
+const modeUploadBtn = document.getElementById("modeUploadBtn");
+const modeLinkBtn = document.getElementById("modeLinkBtn");
+const uploadModeBox = document.getElementById("uploadModeBox");
+const linkModeBox = document.getElementById("linkModeBox");
+const uploadDropzone = document.getElementById("uploadDropzone");
+const fVideoFile = document.getElementById("fVideoFile");
+const uploadIdleState = document.getElementById("uploadIdleState");
+const uploadProgressState = document.getElementById("uploadProgressState");
+const uploadDoneState = document.getElementById("uploadDoneState");
+const uploadProgressFill = document.getElementById("uploadProgressFill");
+const uploadProgressLabel = document.getElementById("uploadProgressLabel");
+const uploadDoneFilename = document.getElementById("uploadDoneFilename");
+const removeUploadedVideoBtn = document.getElementById("removeUploadedVideoBtn");
+const saveRecipeBtnEl = document.getElementById("saveRecipeBtn");
+
+function setVideoMode(mode){
+  modeUploadBtn.classList.toggle("active", mode === "upload");
+  modeLinkBtn.classList.toggle("active", mode === "link");
+  uploadModeBox.style.display = mode === "upload" ? "block" : "none";
+  linkModeBox.style.display = mode === "link" ? "block" : "none";
+}
+modeUploadBtn.addEventListener("click", ()=>setVideoMode("upload"));
+modeLinkBtn.addEventListener("click", ()=>setVideoMode("link"));
+
+function resetUploadUI(){
+  pendingUpload = null;
+  uploadInProgress = false;
+  uploadIdleState.style.display = "block";
+  uploadProgressState.style.display = "none";
+  uploadDoneState.style.display = "none";
+  uploadProgressFill.style.width = "0%";
+  fVideoFile.value = "";
+  saveRecipeBtnEl.disabled = false;
+}
+
+uploadDropzone.addEventListener("click", ()=>{
+  if(uploadInProgress || pendingUpload) return;
+  fVideoFile.click();
+});
+
+removeUploadedVideoBtn.addEventListener("click", (e)=>{
+  e.stopPropagation();
+  resetUploadUI();
+});
+
+fVideoFile.addEventListener("change", ()=>{
+  const file = fVideoFile.files[0];
+  if(!file) return;
+
+  const sizeMB = file.size / (1024*1024);
+  if(sizeMB > MAX_VIDEO_MB){
+    alert(`❌ Video terlalu besar (${sizeMB.toFixed(1)}MB). Maksimal ${MAX_VIDEO_MB}MB supaya kuota Cloudinary tidak cepat habis.\n\nCoba kompres videonya dulu, atau pakai opsi "Link YouTube/Drive".`);
+    fVideoFile.value = "";
+    return;
+  }
+
+  if(CLOUDINARY_CLOUD_NAME.includes("GANTI") || CLOUDINARY_UPLOAD_PRESET.includes("GANTI")){
+    alert("⚠️ Cloudinary belum dikonfigurasi. Isi CLOUDINARY_CLOUD_NAME dan CLOUDINARY_UPLOAD_PRESET di dalam kode terlebih dahulu.");
+    fVideoFile.value = "";
+    return;
+  }
+
+  uploadVideoToCloudinary(file);
+});
+
+function uploadVideoToCloudinary(file){
+  uploadInProgress = true;
+  saveRecipeBtnEl.disabled = true;
+  uploadIdleState.style.display = "none";
+  uploadDoneState.style.display = "none";
+  uploadProgressState.style.display = "block";
+  uploadProgressFill.style.width = "0%";
+  uploadProgressLabel.textContent = "Mengunggah... 0%";
+
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+  formData.append("folder", "kotak-resep");
+
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`);
+
+  xhr.upload.addEventListener("progress", (e)=>{
+    if(e.lengthComputable){
+      const pct = Math.round((e.loaded / e.total) * 100);
+      uploadProgressFill.style.width = pct + "%";
+      uploadProgressLabel.textContent = `Mengunggah... ${pct}%`;
+    }
+  });
+
+  xhr.onload = ()=>{
+    uploadInProgress = false;
+    saveRecipeBtnEl.disabled = false;
+    try{
+      const data = JSON.parse(xhr.responseText);
+      if(xhr.status >= 200 && xhr.status < 300 && data.secure_url){
+        pendingUpload = { url: data.secure_url, publicId: data.public_id, fileName: file.name };
+        uploadProgressState.style.display = "none";
+        uploadDoneState.style.display = "block";
+        uploadDoneFilename.textContent = "🎬 " + file.name;
+      } else {
+        throw new Error(data.error?.message || "Upload gagal");
+      }
+    } catch(err){
+      alert("❌ Gagal mengunggah video: " + err.message);
+      resetUploadUI();
+    }
+  };
+  xhr.onerror = ()=>{
+    uploadInProgress = false;
+    saveRecipeBtnEl.disabled = false;
+    alert("❌ Gagal menghubungi Cloudinary. Cek koneksi internet.");
+    resetUploadUI();
+  };
+  xhr.send(formData);
+}
+
+// Hapus video dari Cloudinary lewat Cloudflare Worker (kalau sudah dipasang)
+async function deleteVideoFromCloudinary(publicId){
+  if(!publicId) return;
+  if(!CLOUDINARY_DELETE_WORKER_URL){
+    console.warn("[video] Worker penghapus belum dikonfigurasi, video di Cloudinary tidak ikut terhapus:", publicId);
+    return;
+  }
+  try{
+    await fetch(CLOUDINARY_DELETE_WORKER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ public_id: publicId, resource_type: "video" })
+    });
+  } catch(err){
+    console.warn("[video] Gagal menghapus video di Cloudinary:", err.message);
+  }
+}
+
 function openForm(id=null){
   editingId = id;
   document.getElementById("formHeading").textContent = id ? "Edit Resep" : "Resep Baru";
   ingredientRows.innerHTML = "";
   stepRows.innerHTML = "";
+
+  resetUploadUI();
+  oldVideoUpload = null; // simpan video lama (kalau ada) untuk dihapus dari Cloudinary kalau diganti/dihapus
 
   if(id){
     const r = recipes.find(x=>x.id === id);
@@ -720,10 +949,21 @@ function openForm(id=null){
     document.getElementById("fCategory").value = r.category;
     document.getElementById("fTime").value = r.time || "";
     document.getElementById("fServings").value = r.servings || "";
-    document.getElementById("fVideo").value = r.videoUrl || "";
+    document.getElementById("fVideo").value = r.videoMode === "link" ? (r.videoUrl || "") : "";
     document.getElementById("fNotes").value = r.notes || "";
     r.ingredients.forEach(i=>addIngredientRow(i.qty, i.name));
     r.steps.forEach(s=>addStepRow(s));
+
+    if(r.videoMode === "upload" && r.videoUpload?.url){
+      setVideoMode("upload");
+      pendingUpload = r.videoUpload; // sudah ada, tidak perlu upload ulang kecuali diganti
+      oldVideoUpload = r.videoUpload;
+      uploadIdleState.style.display = "none";
+      uploadDoneState.style.display = "block";
+      uploadDoneFilename.textContent = "🎬 " + (r.videoUpload.fileName || "Video tersimpan");
+    } else {
+      setVideoMode(r.videoUrl ? "link" : "upload");
+    }
   } else {
     document.getElementById("fName").value = "";
     document.getElementById("fCategory").value = "Makan Malam";
@@ -731,18 +971,28 @@ function openForm(id=null){
     document.getElementById("fServings").value = "";
     document.getElementById("fVideo").value = "";
     document.getElementById("fNotes").value = "";
+    setVideoMode("upload");
     addIngredientRow();
     addIngredientRow();
     addStepRow();
   }
   formOverlay.classList.add("show");
 }
-function closeForm(){ formOverlay.classList.remove("show"); editingId = null; }
-document.getElementById("formCloseBtn").addEventListener("click", closeForm);
-formOverlay.addEventListener("click", (e)=>{ if(e.target === formOverlay) closeForm(); });
+function closeForm(discardPendingVideo = false){
+  if(discardPendingVideo && pendingUpload && pendingUpload.publicId){
+    const isNewUpload = !oldVideoUpload || pendingUpload.publicId !== oldVideoUpload.publicId;
+    if(isNewUpload) deleteVideoFromCloudinary(pendingUpload.publicId);
+  }
+  formOverlay.classList.remove("show");
+  editingId = null;
+}
+document.getElementById("formCloseBtn").addEventListener("click", ()=>closeForm(true));
+formOverlay.addEventListener("click", (e)=>{ if(e.target === formOverlay) closeForm(true); });
 document.getElementById("fabAdd").addEventListener("click", ()=>openForm(null));
 
 document.getElementById("saveRecipeBtn").addEventListener("click", ()=>{
+  if(uploadInProgress){ alert("⏳ Tunggu proses upload video selesai dulu."); return; }
+
   const name = document.getElementById("fName").value.trim();
   if(!name){ alert("❌ Nama masakan wajib diisi!"); return; }
 
@@ -760,12 +1010,35 @@ document.getElementById("saveRecipeBtn").addEventListener("click", ()=>{
   if(ingredients.length === 0){ alert("❌ Tambahkan minimal 1 bahan!"); return; }
   if(steps.length === 0){ alert("❌ Tambahkan minimal 1 langkah memasak!"); return; }
 
+  const currentMode = modeUploadBtn.classList.contains("active") ? "upload" : "link";
+  const linkValue = document.getElementById("fVideo").value.trim();
+
+  let videoMode = "";
+  let videoUrl = "";
+  let videoUpload = null;
+
+  if(currentMode === "upload" && pendingUpload){
+    videoMode = "upload";
+    videoUpload = pendingUpload;
+  } else if(currentMode === "link" && linkValue){
+    videoMode = "link";
+    videoUrl = linkValue;
+  }
+
+  // Kalau ada video lama (edit) tapi sekarang diganti/dihapus, bersihkan dari Cloudinary
+  if(oldVideoUpload && oldVideoUpload.publicId){
+    const stillSame = videoMode === "upload" && videoUpload?.publicId === oldVideoUpload.publicId;
+    if(!stillSame) deleteVideoFromCloudinary(oldVideoUpload.publicId);
+  }
+
   const data = {
     name,
     category: document.getElementById("fCategory").value,
     time: document.getElementById("fTime").value.trim(),
     servings: document.getElementById("fServings").value.trim(),
-    videoUrl: document.getElementById("fVideo").value.trim(),
+    videoMode,
+    videoUrl,
+    videoUpload,
     notes: document.getElementById("fNotes").value.trim(),
     ingredients,
     steps
@@ -781,7 +1054,9 @@ document.getElementById("saveRecipeBtn").addEventListener("click", ()=>{
   }
 
   saveRecipes();
-  closeForm();
+  pendingUpload = null;
+  oldVideoUpload = null;
+  closeForm(false);
   renderRecipeList();
 });
 
