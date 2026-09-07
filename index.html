@@ -347,6 +347,26 @@ main{ padding:18px 16px 20px; max-width:760px; margin:0 auto;}
 .video-mode-btn.active{
   background:var(--turmeric); border-color:var(--turmeric); color:#2B2100;
 }
+.paste-box textarea{
+  min-height:220px; line-height:1.6; font-size:14.5px;
+  font-family:'Karla',sans-serif;
+}
+.paste-hint{
+  font-size:11.5px; color:var(--ink-soft); line-height:1.6;
+  background:var(--paper2); border-radius:8px; padding:10px 12px;
+  margin-bottom:10px; font-family:'Space Mono', monospace;
+}
+.paste-hint b{ color:var(--ink); }
+.parse-preview-btn{
+  width:100%; padding:11px; border:none; border-radius:8px;
+  background:var(--board); color:var(--chalk); font-weight:700; font-size:13px;
+  font-family:'Karla',sans-serif; cursor:pointer; margin-top:10px;
+}
+.manual-back-btn{
+  background:transparent; border:none; color:var(--ink-soft);
+  font-family:'Space Mono', monospace; font-size:11px; text-decoration:underline;
+  cursor:pointer; margin-bottom:10px; display:inline-block;
+}
 .upload-dropzone{
   border:2px dashed rgba(43,33,20,.25); border-radius:10px;
   padding:22px 16px; text-align:center; cursor:pointer;
@@ -550,15 +570,39 @@ main{ padding:18px 16px 20px; max-width:760px; margin:0 auto;}
     </div>
 
     <div class="form-group">
-      <label>Bahan-bahan</label>
-      <div id="ingredientRows"></div>
-      <button type="button" class="add-row-btn" id="addIngredientBtn">+ Tambah Bahan</button>
-    </div>
+      <label>Bahan &amp; Cara Membuat</label>
+      <div class="video-mode-tabs">
+        <button type="button" class="video-mode-btn active" id="modePasteBtn" data-mode="paste">📋 Tempel Resep</button>
+        <button type="button" class="video-mode-btn" id="modeManualBtn" data-mode="manual">✍️ Isi Baris per Baris</button>
+      </div>
 
-    <div class="form-group">
-      <label>Langkah Memasak</label>
-      <div id="stepRows"></div>
-      <button type="button" class="add-row-btn" id="addStepBtn">+ Tambah Langkah</button>
+      <div id="pasteModeBox" class="paste-box">
+        <div class="paste-hint">
+          Tempel <b>bahan</b> dan <b>langkah</b> apa adanya, lalu tekan <b>Simpan Resep</b> — akan dipisah otomatis.
+          Kasih baris judul <b>"Bahan:"</b> dan <b>"Langkah:"</b> (atau "Cara Membuat:") supaya lebih akurat.
+        </div>
+        <textarea id="fPasteRecipe" placeholder="Bahan:
+500 gr daging sapi
+3 siung bawang putih
+2 lembar daun salam
+
+Langkah:
+1. Tumis bumbu sampai harum
+2. Masukkan daging, aduk rata
+3. Tambahkan air, masak sampai empuk"></textarea>
+        <button type="button" class="parse-preview-btn" id="parsePreviewBtn">🔍 Lihat &amp; Perbaiki Rincian (opsional)</button>
+      </div>
+
+      <div id="manualModeBox" class="manual-box" style="display:none;">
+        <button type="button" class="manual-back-btn" id="backToPasteBtn">← kembali ke tempel resep</button>
+        <label style="margin-top:4px;">Bahan-bahan</label>
+        <div id="ingredientRows"></div>
+        <button type="button" class="add-row-btn" id="addIngredientBtn">+ Tambah Bahan</button>
+
+        <label>Langkah Memasak</label>
+        <div id="stepRows"></div>
+        <button type="button" class="add-row-btn" id="addStepBtn">+ Tambah Langkah</button>
+      </div>
     </div>
 
     <div class="form-group">
@@ -793,6 +837,85 @@ document.getElementById("addIngredientBtn").addEventListener("click", ()=>addIng
 document.getElementById("addStepBtn").addEventListener("click", ()=>addStepRow());
 
 /* ============================================================
+   📋 TEMPEL RESEP: toggle mode + parser teks -> bahan/langkah
+   ============================================================ */
+const modePasteBtn = document.getElementById("modePasteBtn");
+const modeManualBtn = document.getElementById("modeManualBtn");
+const pasteModeBox = document.getElementById("pasteModeBox");
+const manualModeBox = document.getElementById("manualModeBox");
+const fPasteRecipe = document.getElementById("fPasteRecipe");
+
+function setInputMode(mode){
+  modePasteBtn.classList.toggle("active", mode === "paste");
+  modeManualBtn.classList.toggle("active", mode === "manual");
+  pasteModeBox.style.display = mode === "paste" ? "block" : "none";
+  manualModeBox.style.display = mode === "manual" ? "block" : "none";
+}
+modePasteBtn.addEventListener("click", ()=>setInputMode("paste"));
+modeManualBtn.addEventListener("click", ()=>setInputMode("manual"));
+document.getElementById("backToPasteBtn").addEventListener("click", ()=>setInputMode("paste"));
+
+// Kata kunci umum untuk mendeteksi header "Bahan" dan "Langkah" dalam teks bebas
+const ING_HEADER_RE = /^(bahan([\s-]?bahan)?|bumbu|ingredients?)\s*:?\s*$/i;
+const STEP_HEADER_RE = /^(langkah([\s-]?langkah)?|cara (memasak|membuat|buat)|instruksi|steps?)\s*:?\s*$/i;
+// Satuan umum untuk memisahkan "jumlah" dari "nama bahan"
+const QTY_RE = /^([\d.,\/½¼¾\s-]+(?:\s?(?:gr|gram|kg|ml|l|liter|sdt|sdm|butir|siung|buah|lembar|batang|ruas|ons|cup|potong|sdt\.|sdm\.)?\.?)?)\s+(.+)$/i;
+
+function stripBullet(line){
+  return line.replace(/^[-•*]\s*/, "").replace(/^\d+[.)]\s*/, "").trim();
+}
+
+function parseRecipeText(text){
+  const rawLines = text.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length>0);
+  let ingLines = [];
+  let stepLines = [];
+
+  const ingHeaderIdx = rawLines.findIndex(l=>ING_HEADER_RE.test(l));
+  const stepHeaderIdx = rawLines.findIndex(l=>STEP_HEADER_RE.test(l));
+
+  if(ingHeaderIdx !== -1 || stepHeaderIdx !== -1){
+    // Ada header eksplisit -> potong berdasarkan posisi header
+    const markers = [];
+    if(ingHeaderIdx !== -1) markers.push({ idx: ingHeaderIdx, type: "ing" });
+    if(stepHeaderIdx !== -1) markers.push({ idx: stepHeaderIdx, type: "step" });
+    markers.sort((a,b)=>a.idx-b.idx);
+
+    markers.forEach((m, i)=>{
+      const start = m.idx + 1;
+      const end = i+1 < markers.length ? markers[i+1].idx : rawLines.length;
+      const chunk = rawLines.slice(start, end);
+      if(m.type === "ing") ingLines = chunk; else stepLines = chunk;
+    });
+  } else {
+    // Tanpa header: pisah berdasarkan paragraf kosong (blok pertama = bahan, sisanya = langkah)
+    const blocks = text.split(/\n\s*\n/).map(b=>b.trim()).filter(Boolean);
+    if(blocks.length >= 2){
+      ingLines = blocks[0].split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+      stepLines = blocks.slice(1).join("\n").split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+    } else {
+      // Heuristik terakhir: baris pendek tanpa kata kerja panjang dianggap bahan,
+      // baris yang diawali angka/kalimat panjang dianggap langkah
+      rawLines.forEach(line=>{
+        const looksLikeStep = /^\d+[.)]/.test(line) || line.split(" ").length > 6;
+        if(looksLikeStep) stepLines.push(line); else ingLines.push(line);
+      });
+    }
+  }
+
+  const ingredients = ingLines.map(stripBullet).filter(Boolean).map(line=>{
+    const m = line.match(QTY_RE);
+    if(m && m[1].trim().length <= 12){
+      return { qty: m[1].trim(), name: m[2].trim() };
+    }
+    return { qty: "", name: line };
+  });
+
+  const steps = stepLines.map(stripBullet).filter(Boolean);
+
+  return { ingredients, steps };
+}
+
+/* ============================================================
    🎬 VIDEO: mode toggle (upload vs link) + upload ke Cloudinary
    ============================================================ */
 let pendingUpload = null; // {url, publicId, fileName} hasil upload aktif di form ini
@@ -934,6 +1057,17 @@ async function deleteVideoFromCloudinary(publicId){
   }
 }
 
+document.getElementById("parsePreviewBtn").addEventListener("click", ()=>{
+  const { ingredients, steps } = parseRecipeText(fPasteRecipe.value);
+  ingredientRows.innerHTML = "";
+  stepRows.innerHTML = "";
+  if(ingredients.length === 0) addIngredientRow();
+  else ingredients.forEach(i=>addIngredientRow(i.qty, i.name));
+  if(steps.length === 0) addStepRow();
+  else steps.forEach(s=>addStepRow(s));
+  setInputMode("manual");
+});
+
 function openForm(id=null){
   editingId = id;
   document.getElementById("formHeading").textContent = id ? "Edit Resep" : "Resep Baru";
@@ -942,6 +1076,7 @@ function openForm(id=null){
 
   resetUploadUI();
   oldVideoUpload = null; // simpan video lama (kalau ada) untuk dihapus dari Cloudinary kalau diganti/dihapus
+  fPasteRecipe.value = "";
 
   if(id){
     const r = recipes.find(x=>x.id === id);
@@ -953,6 +1088,7 @@ function openForm(id=null){
     document.getElementById("fNotes").value = r.notes || "";
     r.ingredients.forEach(i=>addIngredientRow(i.qty, i.name));
     r.steps.forEach(s=>addStepRow(s));
+    setInputMode("manual"); // resep lama sudah terstruktur, tampilkan langsung di mode manual
 
     if(r.videoMode === "upload" && r.videoUpload?.url){
       setVideoMode("upload");
@@ -975,6 +1111,7 @@ function openForm(id=null){
     addIngredientRow();
     addIngredientRow();
     addStepRow();
+    setInputMode("paste"); // resep baru: mulai dari tempel teks bebas
   }
   formOverlay.classList.add("show");
 }
@@ -996,19 +1133,28 @@ document.getElementById("saveRecipeBtn").addEventListener("click", ()=>{
   const name = document.getElementById("fName").value.trim();
   if(!name){ alert("❌ Nama masakan wajib diisi!"); return; }
 
-  const ingredients = [...ingredientRows.querySelectorAll(".dyn-row")]
-    .map(row => ({
-      qty: row.querySelector(".ing-qty").value.trim(),
-      name: row.querySelector(".ing-name").value.trim()
-    }))
-    .filter(i => i.name);
+  const inputMode = modePasteBtn.classList.contains("active") ? "paste" : "manual";
 
-  const steps = [...stepRows.querySelectorAll(".dyn-row")]
-    .map(row => row.querySelector(".step-text").value.trim())
-    .filter(s => s);
+  let ingredients, steps;
+  if(inputMode === "paste"){
+    const parsed = parseRecipeText(fPasteRecipe.value);
+    ingredients = parsed.ingredients;
+    steps = parsed.steps;
+  } else {
+    ingredients = [...ingredientRows.querySelectorAll(".dyn-row")]
+      .map(row => ({
+        qty: row.querySelector(".ing-qty").value.trim(),
+        name: row.querySelector(".ing-name").value.trim()
+      }))
+      .filter(i => i.name);
 
-  if(ingredients.length === 0){ alert("❌ Tambahkan minimal 1 bahan!"); return; }
-  if(steps.length === 0){ alert("❌ Tambahkan minimal 1 langkah memasak!"); return; }
+    steps = [...stepRows.querySelectorAll(".dyn-row")]
+      .map(row => row.querySelector(".step-text").value.trim())
+      .filter(s => s);
+  }
+
+  if(ingredients.length === 0){ alert("❌ Belum ada bahan yang terdeteksi. Cek lagi teksnya, atau isi manual."); return; }
+  if(steps.length === 0){ alert("❌ Belum ada langkah yang terdeteksi. Cek lagi teksnya, atau isi manual."); return; }
 
   const currentMode = modeUploadBtn.classList.contains("active") ? "upload" : "link";
   const linkValue = document.getElementById("fVideo").value.trim();
