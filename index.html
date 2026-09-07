@@ -448,8 +448,24 @@ main{ padding:18px 16px 20px; max-width:760px; margin:0 auto;}
 
 <header class="top">
   <div class="brand"><span class="pin"></span><h1>Kotak Resep</h1></div>
-  <div class="tagline">Resep keluarga &amp; jadwal masak mingguan</div>
+  <div class="tagline" id="userBar" style="display:none; align-items:center; justify-content:space-between; gap:10px;">
+    <span id="userEmailLabel"></span>
+    <button id="signOutBtn" style="background:transparent; border:1px solid var(--board-line); color:var(--chalk-muted); border-radius:6px; padding:3px 9px; font-family:'Space Mono',monospace; font-size:10px; cursor:pointer;">Keluar</button>
+  </div>
 </header>
+
+<!-- ============ AUTH OVERLAY (wajib login Google) ============ -->
+<div class="sheet-overlay show" id="authOverlay" style="z-index:100;">
+  <div class="sheet" style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; text-align:center;">
+    <div style="font-size:44px; margin-bottom:14px;">📖</div>
+    <h2 class="title" style="margin-bottom:8px;">Kotak Resep</h2>
+    <p style="color:var(--ink-soft); margin-bottom:26px; max-width:280px; font-size:14px; line-height:1.6;">
+      Masuk dengan akun Google supaya resep &amp; jadwalmu tersimpan di cloud dan sama persis di HP manapun.
+    </p>
+    <button id="googleSignInBtn" class="form-submit" style="max-width:280px;">🔐 Masuk dengan Google</button>
+    <div id="authError" style="color:var(--chili); font-size:12px; margin-top:14px; max-width:280px;"></div>
+  </div>
+</div>
 
 <nav class="maintabs">
   <button data-tab="resep" class="active">📇 Resep</button>
@@ -616,9 +632,14 @@ Langkah:
 
 <div class="toast" id="toast"></div>
 
+<!-- Firebase SDK (compat) -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+
 <script>
 /* ============================================================
-   STATE & STORAGE (localStorage)
+   STATE & STORAGE (Firebase Auth + Cloud Firestore)
    ============================================================ */
 /* ============================================================
    ⚙️ KONFIGURASI CLOUDINARY (isi sesuai akun Cloudinary kamu)
@@ -640,17 +661,99 @@ const CLOUDINARY_UPLOAD_PRESET = "kotakresep";
 const CLOUDINARY_DELETE_WORKER_URL = "https://mute-sky-86b0.adyajaboleh197.workers.dev/"; // contoh: "https://kotakresep-delete.namamu.workers.dev"
 const MAX_VIDEO_MB = 80;
 
-const LS_RECIPES = "kotakresep_recipes";
-const LS_SCHEDULE = "kotakresep_schedule";
+/* ============================================================
+   ⚙️ KONFIGURASI FIREBASE (isi sesuai project Firebase kamu)
+   ============================================================
+   1. Buka https://console.firebase.google.com -> buat/pakai project.
+   2. Project settings (⚙️) -> General -> "Your apps" -> tambah Web app (</>)
+      -> salin objek firebaseConfig dan tempel di bawah ini.
+   3. Authentication -> Sign-in method -> aktifkan "Google".
+   4. Firestore Database -> Create database -> mode Production.
+   5. Tempel Firestore Rules ini di tab "Rules" lalu Publish:
+
+      rules_version = '2';
+      service cloud.firestore {
+        match /databases/{database}/documents {
+          match /users/{userId}/{document=**} {
+            allow read, write: if request.auth != null && request.auth.uid == userId;
+          }
+        }
+      }
+   ============================================================ */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBIw7ZzpoQdtym-wsCax__qxmDFYoHPuyk",
+  authDomain: "kotak-resep-keluarga.firebaseapp.com",
+  projectId: "kotak-resep-keluarga",
+  storageBucket: "kotak-resep-keluarga.firebasestorage.app",
+  messagingSenderId: "616759234290",
+  appId: "1:616759234290:web:09ed6151748f096329ca6b"
+};
+
+firebase.initializeApp(FIREBASE_CONFIG);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
 const DAYS = ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu","Minggu"];
 
-let recipes = JSON.parse(localStorage.getItem(LS_RECIPES) || "[]");
-let schedule = JSON.parse(localStorage.getItem(LS_SCHEDULE) || "{}");
+let recipes = [];
+let schedule = {};
 let editingId = null;
+let currentUser = null;
+let unsubRecipes = null;
+let unsubSchedule = null;
 
-function saveRecipes(){ localStorage.setItem(LS_RECIPES, JSON.stringify(recipes)); }
-function saveSchedule(){ localStorage.setItem(LS_SCHEDULE, JSON.stringify(schedule)); }
 function uid(){ return "r_" + Date.now() + "_" + Math.floor(Math.random()*9999); }
+
+function userRecipesCol(){ return db.collection("users").doc(currentUser.uid).collection("recipes"); }
+function userScheduleDoc(){ return db.collection("users").doc(currentUser.uid).collection("meta").doc("schedule"); }
+
+function attachFirestoreListeners(){
+  unsubRecipes = userRecipesCol().onSnapshot(snap=>{
+    recipes = snap.docs.map(d=>d.data());
+    renderRecipeList();
+    renderSchedule();
+  }, err=>{ console.error(err); showToast("Gagal memuat resep: " + err.message); });
+
+  unsubSchedule = userScheduleDoc().onSnapshot(snap=>{
+    schedule = snap.exists ? (snap.data() || {}) : {};
+    renderSchedule();
+  }, err=>{ console.error(err); showToast("Gagal memuat jadwal: " + err.message); });
+}
+
+function detachFirestoreListeners(){
+  if(unsubRecipes) unsubRecipes();
+  if(unsubSchedule) unsubSchedule();
+  unsubRecipes = null; unsubSchedule = null;
+  recipes = []; schedule = {};
+}
+
+auth.onAuthStateChanged(user=>{
+  const authOverlay = document.getElementById("authOverlay");
+  const userBar = document.getElementById("userBar");
+  if(user){
+    currentUser = user;
+    authOverlay.classList.remove("show");
+    userBar.style.display = "flex";
+    document.getElementById("userEmailLabel").textContent = user.email || user.displayName || "Masuk";
+    attachFirestoreListeners();
+  } else {
+    currentUser = null;
+    detachFirestoreListeners();
+    userBar.style.display = "none";
+    authOverlay.classList.add("show");
+    renderRecipeList();
+    renderSchedule();
+  }
+});
+
+document.getElementById("googleSignInBtn").addEventListener("click", ()=>{
+  document.getElementById("authError").textContent = "";
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).catch(err=>{
+    document.getElementById("authError").textContent = "Gagal masuk: " + err.message;
+  });
+});
+document.getElementById("signOutBtn").addEventListener("click", ()=> auth.signOut());
 
 function showToast(msg){
   const t = document.getElementById("toast");
@@ -785,19 +888,29 @@ function openDetail(id){
   document.getElementById("editBtn").addEventListener("click", ()=>{ closeDetail(); openForm(r.id); });
   document.getElementById("deleteBtn").addEventListener("click", async ()=>{
     if(confirm(`Hapus resep "${r.name}"?`)){
-      recipes = recipes.filter(x=>x.id !== r.id);
-      // bersihkan jadwal yang memakai resep ini
-      Object.keys(schedule).forEach(day=>{
-        if(schedule[day] && schedule[day].recipeId === r.id) delete schedule[day];
-      });
-      saveRecipes(); saveSchedule();
-      closeDetail();
-      renderRecipeList();
-      showToast("Resep dihapus");
+      try{
+        await userRecipesCol().doc(r.id).delete();
 
-      // hapus video di Cloudinary juga, supaya kuota tidak terus terisi
-      if(r.videoMode === "upload" && r.videoUpload?.publicId){
-        deleteVideoFromCloudinary(r.videoUpload.publicId);
+        // bersihkan jadwal yang memakai resep ini
+        const cleanedSchedule = { ...schedule };
+        let scheduleChanged = false;
+        Object.keys(cleanedSchedule).forEach(day=>{
+          if(cleanedSchedule[day] && cleanedSchedule[day].recipeId === r.id){
+            delete cleanedSchedule[day];
+            scheduleChanged = true;
+          }
+        });
+        if(scheduleChanged) await userScheduleDoc().set(cleanedSchedule);
+
+        closeDetail();
+        showToast("Resep dihapus");
+
+        // hapus video di Cloudinary juga, supaya kuota tidak terus terisi
+        if(r.videoMode === "upload" && r.videoUpload?.publicId){
+          deleteVideoFromCloudinary(r.videoUpload.publicId);
+        }
+      } catch(err){
+        alert("❌ Gagal menghapus resep: " + err.message);
       }
     }
   });
@@ -1127,7 +1240,7 @@ document.getElementById("formCloseBtn").addEventListener("click", ()=>closeForm(
 formOverlay.addEventListener("click", (e)=>{ if(e.target === formOverlay) closeForm(true); });
 document.getElementById("fabAdd").addEventListener("click", ()=>openForm(null));
 
-document.getElementById("saveRecipeBtn").addEventListener("click", ()=>{
+document.getElementById("saveRecipeBtn").addEventListener("click", async ()=>{
   if(uploadInProgress){ alert("⏳ Tunggu proses upload video selesai dulu."); return; }
 
   const name = document.getElementById("fName").value.trim();
@@ -1177,7 +1290,9 @@ document.getElementById("saveRecipeBtn").addEventListener("click", ()=>{
     if(!stillSame) deleteVideoFromCloudinary(oldVideoUpload.publicId);
   }
 
+  const recipeId = editingId || uid();
   const data = {
+    id: recipeId,
     name,
     category: document.getElementById("fCategory").value,
     time: document.getElementById("fTime").value.trim(),
@@ -1190,20 +1305,15 @@ document.getElementById("saveRecipeBtn").addEventListener("click", ()=>{
     steps
   };
 
-  if(editingId){
-    const idx = recipes.findIndex(r=>r.id === editingId);
-    recipes[idx] = { ...recipes[idx], ...data };
-    showToast("Resep diperbarui");
-  } else {
-    recipes.push({ id: uid(), ...data });
-    showToast("Resep disimpan");
+  try{
+    await userRecipesCol().doc(recipeId).set(data);
+    showToast(editingId ? "Resep diperbarui" : "Resep disimpan");
+    pendingUpload = null;
+    oldVideoUpload = null;
+    closeForm(false);
+  } catch(err){
+    alert("❌ Gagal menyimpan ke cloud: " + err.message);
   }
-
-  saveRecipes();
-  pendingUpload = null;
-  oldVideoUpload = null;
-  closeForm(false);
-  renderRecipeList();
 });
 
 /* ============================================================
@@ -1241,24 +1351,32 @@ function renderSchedule(){
   });
 
   board.querySelectorAll(".day-select").forEach(sel=>{
-    sel.addEventListener("change", ()=>{
+    sel.addEventListener("change", async ()=>{
       const day = sel.dataset.day;
       if(!schedule[day]) schedule[day] = {recipeId:"", custom:""};
       schedule[day].recipeId = sel.value;
       if(sel.value) schedule[day].custom = ""; // pilih dari resep -> kosongkan teks bebas
-      saveSchedule();
-      renderSchedule();
-      showToast(`Menu ${day} disimpan`);
+      try{
+        await userScheduleDoc().set(schedule);
+        renderSchedule();
+        showToast(`Menu ${day} disimpan`);
+      } catch(err){
+        alert("❌ Gagal menyimpan jadwal: " + err.message);
+      }
     });
   });
   board.querySelectorAll(".day-custom").forEach(inp=>{
-    inp.addEventListener("change", ()=>{
+    inp.addEventListener("change", async ()=>{
       const day = inp.dataset.day;
       if(!schedule[day]) schedule[day] = {recipeId:"", custom:""};
       schedule[day].custom = inp.value.trim();
       if(inp.value.trim()) schedule[day].recipeId = "";
-      saveSchedule();
-      showToast(`Menu ${day} disimpan`);
+      try{
+        await userScheduleDoc().set(schedule);
+        showToast(`Menu ${day} disimpan`);
+      } catch(err){
+        alert("❌ Gagal menyimpan jadwal: " + err.message);
+      }
     });
   });
 }
